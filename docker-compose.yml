@@ -1,0 +1,69 @@
+version: "3.9"
+
+services:
+  # ── FastAPI Backend ──────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: legalrag-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./chroma_db:/app/chroma_db
+      - ./legal_analyzer.db:/app/legal_analyzer.db
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://legalrag:legalrag_pass@postgres:5432/legalrag
+      - VECTOR_DB_PATH=/app/chroma_db
+      - UPLOAD_DIR=/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - legalrag-net
+
+  # ── React Frontend ──────────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: legalrag-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - legalrag-net
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: legalrag-postgres
+    environment:
+      POSTGRES_USER: legalrag
+      POSTGRES_PASSWORD: legalrag_pass
+      POSTGRES_DB: legalrag
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U legalrag"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - legalrag-net
+
+volumes:
+  pgdata:
+
+networks:
+  legalrag-net:
+    driver: bridge
