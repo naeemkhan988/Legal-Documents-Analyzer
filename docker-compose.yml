@@ -1,7 +1,7 @@
 version: "3.9"
 
 services:
-  # ── FastAPI Backend ──────────────────────────────────────────────────
+  # ── Flask Backend (serves API + HTML pages) ─────────────────────
   backend:
     build:
       context: .
@@ -26,21 +26,7 @@ services:
     networks:
       - legalrag-net
 
-  # ── React Frontend ──────────────────────────────────────────────────
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-    container_name: legalrag-frontend
-    ports:
-      - "3000:80"
-    depends_on:
-      - backend
-    restart: unless-stopped
-    networks:
-      - legalrag-net
-
-  # ── PostgreSQL ──────────────────────────────────────────────────────
+  # ── PostgreSQL ──────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: legalrag-postgres

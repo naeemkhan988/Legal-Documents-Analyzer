@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Reports{% endblock %}
+{% block page_title %}Reports{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6 animate-fade-in">
+    <h1 class="text-2xl font-bold gradient-text">Reports</h1>
+
+    {% if reports %}
+    <div class="space-y-2">
+        {% for report in reports %}
+        <div class="glass-card flex items-center justify-between" style="padding: 1rem 1.5rem;">
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="w-10 h-10 rounded-xl bg-surface-800 flex items-center justify-center flex-shrink-0">
+                    {% if report.report_type == 'pdf' %}
+                    <i data-lucide="file-text" class="w-5 h-5 text-red-400"></i>
+                    {% elif report.report_type == 'html' %}
+                    <i data-lucide="code" class="w-5 h-5 text-orange-400"></i>
+                    {% elif report.report_type == 'json' %}
+                    <i data-lucide="braces" class="w-5 h-5 text-green-400"></i>
+                    {% elif report.report_type == 'excel' %}
+                    <i data-lucide="table" class="w-5 h-5 text-emerald-400"></i>
+                    {% else %}
+                    <i data-lucide="file" class="w-5 h-5 text-surface-300"></i>
+                    {% endif %}
+                </div>
+                <div class="min-w-0">
+                    <p class="font-medium text-surface-100">
+                        Report — {{ report.report_type|upper }}
+                    </p>
+                    <p class="text-xs text-surface-300">
+                        Analysis: {{ report.analysis_id[:12] }}…
+                        · {{ report.created_at.strftime('%b %d, %Y %H:%M') if report.created_at else '—' }}
+                    </p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <span class="badge {% if report.report_type == 'pdf' %}badge-red{% elif report.report_type == 'html' %}badge-yellow{% elif report.report_type == 'json' %}badge-green{% else %}badge-blue{% endif %}">
+                    {{ report.report_type|upper }}
+                </span>
+                <a href="/api/reports/{{ report.id }}/download"
+                   class="btn-secondary text-sm flex items-center gap-1"
+                   style="padding: 0.375rem 0.75rem;">
+                    <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                    Download
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="glass-card text-center py-10">
+        <i data-lucide="file-bar-chart" class="w-12 h-12 text-surface-300 mx-auto mb-3"></i>
+        <p class="text-surface-300">No reports generated yet. Analyze a document and generate a report from the document page.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

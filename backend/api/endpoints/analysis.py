@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from flask import Blueprint, jsonify
 from sqlalchemy.orm import Session
 
 from backend.database.models import Analysis, Clause, Document
@@ -25,23 +25,25 @@ from backend.services.llm_service import summarize_document, get_recommendations
 from backend.services.ner_service import extract_entities
 from backend.services.risk_scorer import explain_risk, get_risk_level, score_document
 from backend.utils.constants import DEFAULT_USER_ID, Messages
+from backend.utils.exceptions import LegalRAGError
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/analyze", tags=["Analysis"])
+blueprint = Blueprint("analysis", __name__)
 
 
 def _get_document(document_id: str, db: Session) -> Document:
     doc = db.query(Document).filter(Document.id == document_id).first()
     if not doc:
-        raise HTTPException(404, Messages.DOCUMENT_NOT_FOUND)
+        raise LegalRAGError(Messages.DOCUMENT_NOT_FOUND)
     if not doc.cleaned_text:
-        raise HTTPException(422, "Document has no extracted text.")
+        raise LegalRAGError("Document has no extracted text.")
     return doc
 
 
-@router.post("/{document_id}", response_model=AnalysisResponse, status_code=201)
-async def analyze_document(document_id: str, db: Session = Depends(get_db)):
+@blueprint.route("/<document_id>", methods=["POST"])
+def analyze_document(document_id: str):
     """Run a full analysis: clauses, entities, risk scoring, summary."""
+    db = get_db()
     doc = _get_document(document_id, db)
     text = doc.cleaned_text
 
@@ -102,7 +104,7 @@ async def analyze_document(document_id: str, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(analysis)
 
-    return AnalysisResponse(
+    resp = AnalysisResponse(
         id=analysis.id,
         document_id=document_id,
         risk_score=risk_score,
@@ -115,11 +117,14 @@ async def analyze_document(document_id: str, db: Session = Depends(get_db)):
         created_at=analysis.created_at,
         updated_at=analysis.updated_at,
     )
+    
+    return jsonify(resp.model_dump()), 201
 
 
-@router.get("/{document_id}", response_model=AnalysisResponse)
-async def get_analysis(document_id: str, db: Session = Depends(get_db)):
+@blueprint.route("/<document_id>", methods=["GET"])
+def get_analysis(document_id: str):
     """Get the latest analysis for a document."""
+    db = get_db()
     analysis = (
         db.query(Analysis)
         .filter(Analysis.document_id == document_id)
@@ -127,9 +132,9 @@ async def get_analysis(document_id: str, db: Session = Depends(get_db)):
         .first()
     )
     if not analysis:
-        raise HTTPException(404, Messages.ANALYSIS_NOT_FOUND)
+        raise LegalRAGError(Messages.ANALYSIS_NOT_FOUND)
 
-    return AnalysisResponse(
+    resp = AnalysisResponse(
         id=analysis.id,
         document_id=document_id,
         risk_score=analysis.risk_score,
@@ -142,44 +147,52 @@ async def get_analysis(document_id: str, db: Session = Depends(get_db)):
         created_at=analysis.created_at,
         updated_at=analysis.updated_at,
     )
+    
+    return jsonify(resp.model_dump())
 
 
-@router.post("/{document_id}/clauses")
-async def extract_clauses_endpoint(document_id: str, db: Session = Depends(get_db)):
+@blueprint.route("/<document_id>/clauses", methods=["POST"])
+def extract_clauses_endpoint(document_id: str):
     """Extract clauses only."""
+    db = get_db()
     doc = _get_document(document_id, db)
     clauses = extract_all_clauses(doc.cleaned_text)
-    return {"document_id": document_id, "clauses": [
+    return jsonify({"document_id": document_id, "clauses": [
         {"clause_type": c.clause_type, "text": c.text, "confidence": c.confidence, "risk_level": c.risk_level}
         for c in clauses
-    ]}
+    ]})
 
 
-@router.post("/{document_id}/entities")
-async def extract_entities_endpoint(document_id: str, db: Session = Depends(get_db)):
+@blueprint.route("/<document_id>/entities", methods=["POST"])
+def extract_entities_endpoint(document_id: str):
     """Extract named entities only."""
+    db = get_db()
     doc = _get_document(document_id, db)
     entities = extract_entities(doc.cleaned_text)
-    return {"document_id": document_id, "entities": entities}
+    return jsonify({"document_id": document_id, "entities": entities})
 
 
-@router.post("/{document_id}/risk-score")
-async def get_risk_score_endpoint(document_id: str, db: Session = Depends(get_db)):
+@blueprint.route("/<document_id>/risk-score", methods=["POST"])
+def get_risk_score_endpoint(document_id: str):
     """Calculate risk score only."""
+    db = get_db()
     doc = _get_document(document_id, db)
     clauses = extract_all_clauses(doc.cleaned_text)
     score = score_document(clauses)
     level = get_risk_level(score)
-    return {"document_id": document_id, "risk_score": score, "risk_level": level}
+    return jsonify({"document_id": document_id, "risk_score": score, "risk_level": level})
 
 
-@router.post("/{document_id}/summary")
-async def get_summary_endpoint(document_id: str, db: Session = Depends(get_db)):
+@blueprint.route("/<document_id>/summary", methods=["POST"])
+def get_summary_endpoint(document_id: str):
     """Generate AI summary only."""
+    db = get_db()
     doc = _get_document(document_id, db)
     try:
         summary = summarize_document(doc.cleaned_text)
         key_terms = extract_key_terms(doc.cleaned_text)
     except Exception as exc:
-        raise HTTPException(503, f"LLM service unavailable: {exc}")
-    return AnalysisSummaryResponse(document_id=document_id, summary=summary, key_terms=key_terms)
+        raise LegalRAGError(f"LLM service unavailable: {exc}")
+        
+    resp = AnalysisSummaryResponse(document_id=document_id, summary=summary, key_terms=key_terms)
+    return jsonify(resp.model_dump())

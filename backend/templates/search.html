@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Semantic Search{% endblock %}
+{% block page_title %}Semantic Search{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6 animate-fade-in">
+    <h1 class="text-2xl font-bold gradient-text">Semantic Search</h1>
+
+    <!-- ═══ MODE TOGGLE ═════════════════════════════════════════════ -->
+    <div class="flex gap-2">
+        <button id="mode-search" class="tab-btn active" onclick="setSearchMode('search')">
+            <i data-lucide="search" class="w-4 h-4"></i> Search
+        </button>
+        <button id="mode-rag" class="tab-btn" onclick="setSearchMode('rag')">
+            <i data-lucide="message-square" class="w-4 h-4"></i> Ask AI (RAG)
+        </button>
+    </div>
+
+    <!-- ═══ SEARCH BAR ══════════════════════════════════════════════ -->
+    <form id="search-form" onsubmit="handleSearch(event)" class="flex gap-2">
+        <input type="text" id="search-input" class="input-field flex-1"
+               placeholder="Search across all documents…"
+               required>
+        <button type="submit" class="btn-primary flex items-center gap-2" id="search-btn">
+            <i data-lucide="search" class="w-4 h-4"></i>
+            <span>Search</span>
+            <div class="spinner hidden" id="search-spinner"></div>
+        </button>
+    </form>
+
+    <!-- ═══ RAG ANSWER ══════════════════════════════════════════════ -->
+    <div id="rag-answer" class="glass-card animate-slide-up hidden">
+        <h3 class="text-sm font-semibold text-brand-400 mb-2">AI Answer</h3>
+        <p class="text-sm text-surface-200 whitespace-pre-wrap" id="rag-answer-text"></p>
+    </div>
+
+    <!-- ═══ RESULTS ═════════════════════════════════════════════════ -->
+    <div id="search-results" class="space-y-3"></div>
+
+    <!-- ═══ EMPTY STATE ═════════════════════════════════════════════ -->
+    <div id="search-empty" class="glass-card text-center py-10">
+        <i data-lucide="search" class="w-12 h-12 text-surface-300 mx-auto mb-3"></i>
+        <p class="text-surface-300">Enter a query to search across your documents using semantic similarity.</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/search.js"></script>
+{% endblock %}

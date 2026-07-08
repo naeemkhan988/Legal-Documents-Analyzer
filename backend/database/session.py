@@ -48,14 +48,15 @@ SessionLocal = sessionmaker(
 )
 
 
-# ── FastAPI Dependency ────────────────────────────────────────────────
-def get_db() -> Generator[Session, None, None]:
-    """Yield a request-scoped database session, auto-closing on exit."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# ── Flask Dependency Helper ───────────────────────────────────────────
+def get_db() -> Session:
+    """Return the request-scoped database session from Flask's application context.
+    
+    This replaces the old FastAPI dependency generator. The session is opened
+    in `before_request` and closed in `teardown_appcontext`.
+    """
+    from flask import g
+    return getattr(g, "db", None)
 
 
 # ── Context Manager (for non-FastAPI usage) ───────────────────────────

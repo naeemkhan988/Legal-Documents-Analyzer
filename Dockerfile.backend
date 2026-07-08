@@ -17,6 +17,8 @@ RUN python -m spacy download en_core_web_sm || true
 
 # Copy source
 COPY backend/ ./backend/
+COPY backend/templates ./backend/templates
+COPY backend/static ./backend/static
 COPY .env.example .env
 
 # Create directories
@@ -24,4 +26,4 @@ RUN mkdir -p uploads chroma_db
 
 EXPOSE 8000
 
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:8000", "backend:create_app()"]

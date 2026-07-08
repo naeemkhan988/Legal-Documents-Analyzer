@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block title %}{{ doc.filename }}{% endblock %}
+{% block page_title %}Document{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6 animate-fade-in" id="doc-page" data-doc-id="{{ doc.id }}">
+
+    <!-- ═══ DOCUMENT HEADER ═════════════════════════════════════════ -->
+    <div class="glass-card flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div class="flex items-center gap-4 min-w-0">
+            <div class="w-12 h-12 rounded-xl bg-surface-800 flex items-center justify-center flex-shrink-0">
+                {% if doc.file_type == 'pdf' %}
+                <i data-lucide="file-text" class="w-6 h-6 text-red-400"></i>
+                {% elif doc.file_type == 'docx' %}
+                <i data-lucide="file-text" class="w-6 h-6 text-blue-400"></i>
+                {% else %}
+                <i data-lucide="file" class="w-6 h-6 text-surface-300"></i>
+                {% endif %}
+            </div>
+            <div class="min-w-0">
+                <h1 class="text-xl font-bold truncate">{{ doc.filename }}</h1>
+                <p class="text-sm text-surface-300">
+                    {{ doc.file_type|upper }} ·
+                    {{ "%.1f"|format(doc.file_size / 1024) }} KB ·
+                    Uploaded {{ doc.created_at.strftime('%b %d, %Y at %H:%M') if doc.created_at else '—' }}
+                </p>
+            </div>
+        </div>
+        <div class="flex gap-2 flex-shrink-0">
+            {% if not analysis %}
+            <button id="analyze-btn" onclick="analyzeDocument()" class="btn-primary flex items-center gap-2">
+                <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+                Analyze Document
+            </button>
+            {% endif %}
+            <button onclick="deleteDocumentAndRedirect('{{ doc.id }}')" class="btn-danger flex items-center gap-2">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                Delete
+            </button>
+        </div>
+    </div>
+
+    <!-- ═══ TABS ════════════════════════════════════════════════════ -->
+    <div class="flex gap-2 overflow-x-auto pb-1">
+        <button class="tab-btn active" data-tab="overview" onclick="switchTab('overview')">
+            <i data-lucide="eye" class="w-4 h-4"></i> Overview
+        </button>
+        <button class="tab-btn" data-tab="text" onclick="switchTab('text')">
+            <i data-lucide="file-text" class="w-4 h-4"></i> Full Text
+        </button>
+        <button class="tab-btn" data-tab="analysis" onclick="switchTab('analysis')">
+            <i data-lucide="bar-chart-3" class="w-4 h-4"></i> Analysis
+        </button>
+    </div>
+
+    <!-- ═══ TAB: OVERVIEW ═══════════════════════════════════════════ -->
+    <div id="tab-overview" class="tab-panel active">
+        {% if analysis %}
+        <div class="grid gap-6 lg:grid-cols-3">
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Summary -->
+                <div class="glass-card">
+                    <h3 class="text-lg font-semibold mb-3">Summary</h3>
+                    <p class="text-sm text-surface-200 whitespace-pre-wrap">{{ analysis.summary or 'No summary available.' }}</p>
+                    {% if analysis.recommendations_json and analysis.recommendations_json|length > 0 %}
+                    <div class="mt-4">
+                        <h4 class="text-sm font-semibold text-surface-100 mb-2">Recommendations</h4>
+                        <ul class="space-y-1 text-sm text-surface-300">
+                            {% for rec in analysis.recommendations_json %}
+                            <li>• {{ rec }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Risk Score + Report -->
+            <div class="flex flex-col items-center gap-6">
+                <!-- Risk Score Gauge -->
+                <div class="glass-card w-full flex flex-col items-center">
+                    <h3 class="text-sm font-semibold text-surface-300 mb-3">Risk Score</h3>
+                    <div class="relative w-32 h-32">
+                        <svg viewBox="0 0 36 36" class="w-full h-full transform -rotate-90">
+                            <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                  fill="none" stroke="#1e293b" stroke-width="3" />
+                            <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                  fill="none"
+                                  stroke="{% if analysis.risk_level == 'RED' %}#ef4444{% elif analysis.risk_level == 'YELLOW' %}#eab308{% else %}#22c55e{% endif %}"
+                                  stroke-width="3"
+                                  stroke-dasharray="{{ (analysis.risk_score or 0) }}, 100"
+                                  stroke-linecap="round" />
+                        </svg>
+                        <div class="absolute inset-0 flex flex-col items-center justify-center">
+                            <span class="text-2xl font-bold">{{ "%.0f"|format(analysis.risk_score or 0) }}</span>
+                            <span class="text-xs {% if analysis.risk_level == 'RED' %}text-red-400{% elif analysis.risk_level == 'YELLOW' %}text-yellow-400{% else %}text-green-400{% endif %}">
+                                {{ analysis.risk_level or 'N/A' }}
+                            </span>
+                        </div>
+                    </div>
+                    {% if analysis.risk_summary %}
+                    <p class="text-xs text-surface-300 mt-3 text-center">{{ analysis.risk_summary[:200] }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Report Generation -->
+                <div class="glass-card w-full">
+                    <h3 class="text-sm font-semibold text-surface-300 mb-3">Generate Report</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="generateReport('{{ analysis.id }}', 'pdf')" class="btn-secondary text-sm flex items-center justify-center gap-1">
+                            <i data-lucide="file-text" class="w-3.5 h-3.5"></i> PDF
+                        </button>
+                        <button onclick="generateReport('{{ analysis.id }}', 'html')" class="btn-secondary text-sm flex items-center justify-center gap-1">
+                            <i data-lucide="code" class="w-3.5 h-3.5"></i> HTML
+                        </button>
+                        <button onclick="generateReport('{{ analysis.id }}', 'json')" class="btn-secondary text-sm flex items-center justify-center gap-1">
+                            <i data-lucide="braces" class="w-3.5 h-3.5"></i> JSON
+                        </button>
+                        <button onclick="generateReport('{{ analysis.id }}', 'excel')" class="btn-secondary text-sm flex items-center justify-center gap-1">
+                            <i data-lucide="table" class="w-3.5 h-3.5"></i> Excel
+                        </button>
+                    </div>
+                    <div id="report-result" class="mt-3 hidden"></div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="glass-card text-center py-10" id="no-analysis-overview">
+            <i data-lucide="sparkles" class="w-12 h-12 text-surface-300 mx-auto mb-3"></i>
+            <p class="text-surface-300 mb-4">No analysis yet. Run AI analysis to get insights.</p>
+            <button onclick="analyzeDocument()" class="btn-primary flex items-center gap-2 mx-auto" id="analyze-btn-overview">
+                <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+                Analyze Document
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ═══ TAB: FULL TEXT ══════════════════════════════════════════ -->
+    <div id="tab-text" class="tab-panel">
+        <div class="glass-card">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-lg font-semibold">Document Text</h3>
+                <span class="text-xs text-surface-300">{{ doc.filename }}</span>
+            </div>
+            <pre class="bg-surface-900 rounded-xl p-4 text-sm text-surface-200 overflow-auto max-h-[60vh] whitespace-pre-wrap font-mono leading-relaxed">{{ doc.cleaned_text or doc.raw_text or 'No text extracted.' }}</pre>
+        </div>
+    </div>
+
+    <!-- ═══ TAB: ANALYSIS ══════════════════════════════════════════ -->
+    <div id="tab-analysis" class="tab-panel">
+        {% if analysis and analysis.clauses_json %}
+        <div class="space-y-3" id="clauses-container">
+            <h3 class="text-lg font-semibold mb-2">Extracted Clauses ({{ analysis.clauses_json|length }})</h3>
+            {% for clause in analysis.clauses_json %}
+            <div class="glass-card" style="padding: 1rem 1.5rem;">
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="badge {% if clause.risk_level == 'RED' %}badge-red{% elif clause.risk_level == 'YELLOW' %}badge-yellow{% else %}badge-green{% endif %}">
+                        {{ clause.risk_level or 'N/A' }}
+                    </span>
+                    <span class="text-sm font-semibold text-surface-100">{{ clause.clause_type }}</span>
+                    <span class="text-xs text-surface-300 ml-auto">Confidence: {{ "%.0f"|format((clause.confidence or 0) * 100) }}%</span>
+                </div>
+                <p class="text-sm text-surface-200">{{ clause.text[:500] }}</p>
+            </div>
+            {% endfor %}
+        </div>
+        {% elif analysis %}
+        <div class="glass-card text-center py-8">
+            <p class="text-surface-300">Analysis complete but no clauses were extracted.</p>
+        </div>
+        {% else %}
+        <div class="glass-card text-center py-8" id="no-analysis-tab">
+            <i data-lucide="scan-search" class="w-10 h-10 text-surface-300 mx-auto mb-3"></i>
+            <p class="text-surface-300 mb-4">Run analysis to extract clauses and entities.</p>
+            <button onclick="analyzeDocument()" class="btn-primary flex items-center gap-2 mx-auto">
+                <i data-lucide="bar-chart-3" class="w-4 h-4"></i> Run Analysis
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/document.js"></script>
+{% endblock %}
