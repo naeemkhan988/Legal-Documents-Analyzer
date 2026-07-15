@@ -1,7 +1,7 @@
 version: "3.9"
 
 services:
-  # ── Flask Backend (serves API + HTML pages) ─────────────────────
+  # ── FastAPI Backend (serves API + HTML pages) ─────────────────────
   backend:
     build:
       context: .
@@ -19,9 +19,50 @@ services:
       - DATABASE_URL=postgresql://legalrag:legalrag_pass@postgres:5432/legalrag
       - VECTOR_DB_PATH=/app/chroma_db
       - UPLOAD_DIR=/app/uploads
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - legalrag-net
+
+  # ── Celery Worker ───────────────────────────────────────────────
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: legalrag-celery-worker
+    command: ["celery", "-A", "backend.services.celery_worker.celery_app", "worker", "--loglevel=info"]
+    volumes:
+      - ./uploads:/app/uploads
+      - ./chroma_db:/app/chroma_db
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://legalrag:legalrag_pass@postgres:5432/legalrag
+      - VECTOR_DB_PATH=/app/chroma_db
+      - UPLOAD_DIR=/app/uploads
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - legalrag-net
+
+  # ── Redis ───────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: legalrag-redis
+    ports:
+      - "6379:6379"
     restart: unless-stopped
     networks:
       - legalrag-net

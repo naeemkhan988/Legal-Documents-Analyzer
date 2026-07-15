@@ -7,12 +7,13 @@ Compare multiple legal documents side-by-side.
 from __future__ import annotations
 
 import logging
+from typing import Any, Dict
 
-from flask import Blueprint, jsonify, request
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.database.models import Comparison, Document
-from backend.database.session import get_db
+from backend.dependencies import get_db
 from backend.schemas.analysis import (
     ClauseComparisonRequest,
     ComparisonRequest,
@@ -25,28 +26,19 @@ from backend.services.contract_comparator import (
     highlight_changes,
 )
 from backend.utils.constants import DEFAULT_USER_ID
-from backend.utils.exceptions import LegalRAGError
 
 logger = logging.getLogger(__name__)
-blueprint = Blueprint("comparison", __name__)
+router = APIRouter()
 
 
-@blueprint.route("", methods=["POST"])
-def compare():
+@router.post("", response_model=ComparisonResponse, status_code=status.HTTP_201_CREATED)
+def compare(body: ComparisonRequest, db: Session = Depends(get_db)):
     """Compare two or more documents."""
-    body_data = request.get_json() or {}
-    try:
-        body = ComparisonRequest.model_validate(body_data)
-    except Exception as exc:
-        raise LegalRAGError("Invalid request data", detail=str(exc))
-
-    db = get_db()
-    # Load documents
     texts = {}
     for did in body.document_ids:
         doc = db.query(Document).filter(Document.id == did).first()
         if not doc or not doc.cleaned_text:
-            raise LegalRAGError(f"Document {did} not found or has no text.")
+            raise HTTPException(status_code=404, detail=f"Document {did} not found or has no text.")
         texts[did] = doc.cleaned_text
 
     result = compare_documents(texts)
@@ -63,44 +55,34 @@ def compare():
     db.commit()
     db.refresh(comp)
 
-    resp = ComparisonResponse(
+    return ComparisonResponse(
         id=comp.id,
         document_ids=body.document_ids,
         comparison_result={**result, "summary": summary},
         differences=result.get("differences"),
         created_at=comp.created_at,
     )
-    return jsonify(resp.model_dump()), 201
 
 
-@blueprint.route("/<comparison_id>", methods=["GET"])
-def get_comparison(comparison_id: str):
+@router.get("/{comparison_id}", response_model=ComparisonResponse)
+def get_comparison(comparison_id: str, db: Session = Depends(get_db)):
     """Get a saved comparison."""
-    db = get_db()
     comp = db.query(Comparison).filter(Comparison.id == comparison_id).first()
     if not comp:
-        raise LegalRAGError("Comparison not found.")
+        raise HTTPException(status_code=404, detail="Comparison not found.")
         
-    resp = ComparisonResponse.model_validate(comp)
-    return jsonify(resp.model_dump())
+    return ComparisonResponse.model_validate(comp)
 
 
-@blueprint.route("/by-clause", methods=["POST"])
-def compare_by_clause():
+@router.post("/by-clause")
+def compare_by_clause(body: ClauseComparisonRequest, db: Session = Depends(get_db)) -> Dict[str, Any]:
     """Compare a specific clause type across documents."""
-    body_data = request.get_json() or {}
-    try:
-        body = ClauseComparisonRequest.model_validate(body_data)
-    except Exception as exc:
-        raise LegalRAGError("Invalid request data", detail=str(exc))
-
-    db = get_db()
     texts = {}
     for did in body.document_ids:
         doc = db.query(Document).filter(Document.id == did).first()
         if not doc or not doc.cleaned_text:
-            raise LegalRAGError(f"Document {did} not found.")
+            raise HTTPException(status_code=404, detail=f"Document {did} not found.")
         texts[did] = doc.cleaned_text
 
     result = compare_by_clause_type(texts, body.clause_type)
-    return jsonify(result)
+    return result

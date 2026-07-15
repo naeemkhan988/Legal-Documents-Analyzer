@@ -48,15 +48,7 @@ SessionLocal = sessionmaker(
 )
 
 
-# ── Flask Dependency Helper ───────────────────────────────────────────
-def get_db() -> Session:
-    """Return the request-scoped database session from Flask's application context.
-    
-    This replaces the old FastAPI dependency generator. The session is opened
-    in `before_request` and closed in `teardown_appcontext`.
-    """
-    from flask import g
-    return getattr(g, "db", None)
+# ── FastAPI Dependency Helper (now in dependencies.py) ────────────────
 
 
 # ── Context Manager (for non-FastAPI usage) ───────────────────────────
@@ -76,7 +68,7 @@ def db_session() -> Generator[Session, None, None]:
 
 # ── Table Creation Utility ────────────────────────────────────────────
 def init_db() -> None:
-    """Create all tables that don't yet exist.
+    """Create all tables that don't yet exist, and seed the default user.
 
     Call this once at application startup.
     """
@@ -84,4 +76,18 @@ def init_db() -> None:
     import backend.database.models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+
+    # Create default user if it doesn't exist
+    from backend.database.models import User
+    with db_session() as session:
+        exists = session.query(User).filter(User.id == "default_user").first()
+        if not exists:
+            session.add(User(
+                id="default_user",
+                email="default@legalrag.local",
+                username="default_user",
+                password_hash="not-used",
+                is_active=True,
+            ))
+
     logger.info("Database tables initialised (engine=%s)", engine.url)

@@ -101,3 +101,30 @@ TEXT:
 {text}
 
 Return ONLY valid JSON. [/INST]"""
+
+# ── Clause Analysis & Scoring ────────────────────────────────────────
+
+CLAUSE_ANALYSIS_PROMPT = """<s>[INST] You are an expert contract risk analyst. Analyze the following {clause_type} clause.
+1. Assign a risk score from 0.0 (safest) to 1.0 (most risky).
+2. Identify specific obligations in this clause.
+3. Explain the risk.
+
+CLAUSE TEXT:
+{text}
+
+Return your response ONLY as a JSON object in this format:
+{{"risk_score": 0.5, "explanation": "Why it is risky...", "obligations": ["ob 1", "ob 2"]}}
+[/INST]"""
+
+# ── Missing Clause Detection ─────────────────────────────────────────
+
+MISSING_CLAUSE_PROMPT = """<s>[INST] You are a legal expert reviewing a contract.
+The following standard clause types were found in the contract:
+{found_clauses}
+
+Based on standard commercial contracts, identify any critical missing clauses from the following list:
+{all_clauses}
+
+Return ONLY a JSON array of missing clause types that represent a significant risk due to their absence.
+[/INST]"""
+

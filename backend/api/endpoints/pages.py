@@ -8,21 +8,24 @@ Each route queries the DB via SQLAlchemy and renders a template.
 from __future__ import annotations
 
 import logging
-from flask import Blueprint, render_template
+
+from fastapi import APIRouter, Depends, Request
+from fastapi.templating import Jinja2Templates
+from sqlalchemy.orm import Session
 
 from backend.config import settings
 from backend.database.models import Analysis, Document, Report
-from backend.database.session import get_db
+from backend.dependencies import get_db
 
 logger = logging.getLogger(__name__)
-blueprint = Blueprint("pages", __name__)
+router = APIRouter()
 
+templates = Jinja2Templates(directory="backend/templates")
 
 # ── Dashboard ─────────────────────────────────────────────────────────
-@blueprint.route("/", methods=["GET"])
-def dashboard():
+@router.get("/")
+def dashboard(request: Request, db: Session = Depends(get_db)):
     """Dashboard: upload form + recent document list."""
-    db = get_db()
     docs = (
         db.query(Document)
         .order_by(Document.created_at.desc())
@@ -37,27 +40,32 @@ def dashboard():
         .filter(Analysis.risk_level == "RED")
         .count()
     )
-    return render_template(
+    return templates.TemplateResponse(
         "dashboard.html",
-        documents=docs,
-        total_docs=total_docs,
-        total_analyzed=total_analyzed,
-        high_risk=high_risk,
+        {
+            "request": request,
+            "documents": docs,
+            "total_docs": total_docs,
+            "total_analyzed": total_analyzed,
+            "high_risk": high_risk,
+        }
     )
 
 
 # ── Document Detail ──────────────────────────────────────────────────
-@blueprint.route("/document/<document_id>", methods=["GET"])
-def document_detail(document_id: str):
+@router.get("/document/{document_id}")
+def document_detail(request: Request, document_id: str, db: Session = Depends(get_db)):
     """Document overview with tabs: Overview / Full Text / Analysis."""
-    db = get_db()
     doc = db.query(Document).filter(Document.id == document_id).first()
     if not doc:
-        return render_template(
+        return templates.TemplateResponse(
             "dashboard.html",
-            documents=[], total_docs=0,
-            total_analyzed=0, high_risk=0,
-            error="Document not found.",
+            {
+                "request": request,
+                "documents": [], "total_docs": 0,
+                "total_analyzed": 0, "high_risk": 0,
+                "error": "Document not found.",
+            }
         )
     # Try to load latest analysis
     analysis = (
@@ -66,58 +74,68 @@ def document_detail(document_id: str):
         .order_by(Analysis.created_at.desc())
         .first()
     )
-    return render_template(
+    return templates.TemplateResponse(
         "document.html",
-        doc=doc,
-        analysis=analysis,
+        {
+            "request": request,
+            "doc": doc,
+            "analysis": analysis,
+        }
     )
 
 
 # ── Search ────────────────────────────────────────────────────────────
-@blueprint.route("/search", methods=["GET"])
-def search_page():
+@router.get("/search")
+def search_page(request: Request):
     """Semantic search + RAG Q&A page."""
-    return render_template("search.html")
+    return templates.TemplateResponse("search.html", {"request": request})
 
 
 # ── Compare ───────────────────────────────────────────────────────────
-@blueprint.route("/compare", methods=["GET"])
-def compare_page():
+@router.get("/compare")
+def compare_page(request: Request, db: Session = Depends(get_db)):
     """Document comparison page with document picker."""
-    db = get_db()
     docs = (
         db.query(Document)
         .order_by(Document.created_at.desc())
         .all()
     )
-    return render_template(
+    return templates.TemplateResponse(
         "compare.html",
-        documents=docs,
+        {
+            "request": request,
+            "documents": docs,
+        }
     )
 
 
 # ── Reports ───────────────────────────────────────────────────────────
-@blueprint.route("/reports", methods=["GET"])
-def reports_page():
+@router.get("/reports")
+def reports_page(request: Request, db: Session = Depends(get_db)):
     """List generated reports with download links."""
-    db = get_db()
     reports = (
         db.query(Report)
         .order_by(Report.created_at.desc())
         .limit(50)
         .all()
     )
-    return render_template(
+    return templates.TemplateResponse(
         "reports.html",
-        reports=reports,
+        {
+            "request": request,
+            "reports": reports,
+        }
     )
 
 
 # ── Settings ──────────────────────────────────────────────────────────
-@blueprint.route("/settings", methods=["GET"])
-def settings_page():
+@router.get("/settings")
+def settings_page(request: Request):
     """LLM configuration display + system info."""
-    return render_template(
+    return templates.TemplateResponse(
         "settings.html",
-        settings=settings,
+        {
+            "request": request,
+            "settings": settings,
+        }
     )

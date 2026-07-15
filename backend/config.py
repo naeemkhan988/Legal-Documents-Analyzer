@@ -41,6 +41,14 @@ class Settings(BaseSettings):
     # -- Database -------------------------------------------------------
     DATABASE_URL: str = "sqlite:///./legal_analyzer.db"
 
+    # -- JWT Auth -------------------------------------------------------
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 hours
+    ALGORITHM: str = "HS256"
+
+    # -- Celery & Redis -------------------------------------------------
+    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
+
     # -- LLM ------------------------------------------------------------
     LLM_SERVICE: LLMProvider = LLMProvider.OLLAMA
 
@@ -104,6 +112,19 @@ class Settings(BaseSettings):
         p = Path(self.VECTOR_DB_PATH)
         p.mkdir(parents=True, exist_ok=True)
         return p
+
+    # -- JWT convenience aliases (referenced by dependencies.py & auth.py) --
+    @property
+    def JWT_SECRET_KEY(self) -> str:
+        return self.SECRET_KEY
+
+    @property
+    def JWT_ALGORITHM(self) -> str:
+        return self.ALGORITHM
+
+    @property
+    def JWT_ACCESS_TOKEN_EXPIRES_MINUTES(self) -> int:
+        return self.ACCESS_TOKEN_EXPIRE_MINUTES
 
     class Config:
         env_file = ".env"
